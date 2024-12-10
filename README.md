@@ -52,7 +52,6 @@ Apache License 2.0
           title={Are Expressive Models Truly Necessary for Offline {RL}?},
           author={Guan Wang and Haoyi Niu and Jianxiong Li and Li Jiang and Jianming HU and Xianyuan Zhan},
           booktitle={The 39th Annual AAAI Conference on Artificial Intelligence (AAAI)},
-          year={2025},
-          url={https://openreview.net/forum?id=19KvVggjVr}
+          year={2025}
 }
 ```
