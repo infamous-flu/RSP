@@ -51,8 +51,8 @@ Apache License 2.0
           wang-niu2024rsp,
           title={Are Expressive Models Truly Necessary for Offline {RL}?},
           author={Guan Wang and Haoyi Niu and Jianxiong Li and Li Jiang and Jianming HU and Xianyuan Zhan},
-          booktitle={NeurIPS 2024 Workshop on Open-World Agents},
-          year={2024},
+          booktitle={The 39th Annual AAAI Conference on Artificial Intelligence (AAAI)},
+          year={2025},
           url={https://openreview.net/forum?id=19KvVggjVr}
 }
 ```
