@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import pickle
 
 import jax
 import jax.numpy as jnp
@@ -15,8 +16,21 @@ from filelock import FileLock
 from tseq import TSeqLearner
 from vector_env import DummyVectorEnv
 from metric_aggregator import MetricAggregator
+from iql import Critic, ensemblize
 
 from envs import *
+
+def load_critic(load_path: str):
+    with open(load_path, 'rb') as f:
+        critic_data = pickle.load(f)
+    critic_model = ensemblize(Critic, num_qs=2)(critic_data['hidden_dims'])
+
+    @jax.jit
+    def critic_fn(observations, actions):
+        q1, q2 = critic_model.apply(critic_data['critic_params'], observations, actions)
+        return jnp.minimum(q1, q2)
+    
+    return critic_fn
 
 
 def evaluate_tseq(tseq, envs, render=False):
@@ -26,7 +40,7 @@ def evaluate_tseq(tseq, envs, render=False):
 
     ep_return          = np.zeros(bs)
     ep_count           = np.zeros(bs, np.int32)
-    
+
     obs = envs.reset()
     while True:
         obs_device = jax.device_put(obs)
@@ -41,6 +55,75 @@ def evaluate_tseq(tseq, envs, render=False):
 
         # accumulate rewards
         sum_reward         += rew
+        ep_return[done]         += sum_reward[done]
+        ep_count[done]          += 1
+
+        sum_reward[done]         = 0
+
+        # terminate if all done
+        if np.sum(ep_count >= 1) >= bs:
+            break
+
+    # divide by number of episodes
+    ep_return         /= ep_count
+
+    # Normalize returns
+    ep_return         = 100 * envs.get_normalized_score(ep_return)
+
+    return {
+        "return":     np.mean(ep_return),
+        "return_std": np.std(ep_return),
+    }
+
+def evaluate_tseq_with_critic(tseq, envs, critic_path, n_candidates=10, render=False):
+    bs = envs.num
+
+    critic_fn = load_critic(critic_path)
+
+    sum_reward         = np.zeros(bs)
+
+    ep_return          = np.zeros(bs)
+    ep_count           = np.zeros(bs, np.int32)
+
+    obs = envs.reset()
+    while True:
+        obs_device = jax.device_put(obs)
+
+        candidate_actions = []
+        candidate_plans = []
+        
+        for _ in range(n_candidates):
+            act, plan = jax.device_get(tseq.infer(obs_device))
+            candidate_actions.append(act)
+            candidate_plans.append(plan)
+
+        candidate_actions = np.stack(candidate_actions, axis=0)
+        obs_expanded = np.repeat(obs[np.newaxis, ...], n_candidates, axis=0)
+        obs_flat = obs_expanded.reshape(-1, *obs.shape[1:])
+        act_flat = candidate_actions.reshape(-1, *candidate_actions.shape[2:])
+
+        q_values = critic_fn(jax.device_put(obs_flat), jax.device_put(act_flat))
+        q_values = jax.device_get(q_values)
+
+        q_values = q_values.reshape(n_candidates, bs)
+
+        best_indices = np.argmax(q_values, axis=0)
+        act = candidate_actions[best_indices, np.arange(bs)]
+
+        if len(candidate_plans[0]) > 0:
+            plan = [candidate_plans[best_indices[i]][i] for i in range(bs)]
+        else:
+            plan = []
+
+        # step env
+        obs, rew, done, _ = envs.step(act)
+        if render:
+            if len(plan):
+                envs.envs[0].render_plan(plan[0], color_far=np.array([1., 0., 0., 1.]))
+            envs.envs[0].render()
+
+        # accumulate rewards
+        sum_reward              += rew
         ep_return[done]         += sum_reward[done]
         ep_count[done]          += 1
 
@@ -169,6 +252,11 @@ def train_tseq(conf):
 
     metrics = evaluate_tseq(tseq, eval_envs)
     wandb.log(metrics)
+
+    critic_path = f"critics/{conf.task}_critic.pkl"
+    if os.path.exists(critic_path):
+        critic_metrics = evaluate_tseq_with_critic(tseq, eval_envs, critic_path, n_candidates=10)
+        wandb.log({f"critic_{k}": v for k, v in critic_metrics.items()})
 
     # save eval metrics
     if conf.log_eval_metric_save_name:
