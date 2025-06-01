@@ -27,11 +27,11 @@ tasks:
   # Using a list of dict (override config) like below
 
   ##################### Adroit Suite ###################
-  - task: antmaze-umaze-v2
-  - task: antmaze-umaze-diverse-v2
+  # - task: antmaze-umaze-v2
+  # - task: antmaze-umaze-diverse-v2
 
   - task: antmaze-medium-play-v2
   - task: antmaze-medium-diverse-v2
 
-  - task: antmaze-large-play-v2
-  - task: antmaze-large-diverse-v2
+  # - task: antmaze-large-play-v2
+  # - task: antmaze-large-diverse-v2
