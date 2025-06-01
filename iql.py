@@ -29,6 +29,7 @@ class IQLConfig(BaseModel):
     algo: str = "IQL"
     project: str = "IQL-antmaze-medium-diverse-v2"
     env_name: str = "antmaze-medium-diverse-v2"
+    seed: int = 42
     eval_episodes: int = 5
     log_interval: int = 100000
     eval_interval: int = 100000
@@ -433,8 +434,8 @@ def evaluate(
 
 def main():
     wandb.init(config=config, project=config.project)
-    seed = random.SystemRandom().randint(0, int(1e8))
-    rng = jax.random.PRNGKey(seed)
+    config.seed = random.SystemRandom().randint(0, int(1e8))
+    rng = jax.random.PRNGKey(config.seed)
     env = gym.make(config.env_name)
     dataset, obs_mean, obs_std = get_dataset(env, config)
     # create train_state
@@ -496,6 +497,8 @@ def main():
 
 
 if __name__ == "__main__":
-    for _ in range(10):
-        main()
-    wandb.finish()
+    try:
+        for _ in range(10):
+            main()
+    finally:
+        wandb.finish()
